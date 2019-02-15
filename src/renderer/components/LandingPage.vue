@@ -36,7 +36,7 @@
         </el-input>
       </el-col>
     </el-row>
-    <el-row>
+    <el-row class="box">
       <!-- <el-card v-for="(element, index) in elements" :key="index" shadow="hover" class="item">
         {{ element.data.asin }}
       </el-card> -->
@@ -46,12 +46,18 @@
         <el-table-column prop="data.rank" v-if="getFullInfo" label="Rank"></el-table-column>
       </el-table>
     </el-row>
+    <el-row v-if="elements.length > 0">
+      <el-col :span="6">
+        <el-button @click="copyAllAsins()" type="info" plain>Copy all ASIN`s</el-button>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script>
 
   import Amazon from './amazon';
+  const { clipboard } = require('electron')
 
   export default {
     components: { },
@@ -86,6 +92,16 @@
           await myAmazon.getOnlyAsins();
         }
 
+      },
+      copyAllAsins(){
+        let allAsins = this.elements.map(element => element.data.asin);
+
+        clipboard.writeText(allAsins.join(' '));
+
+        this.$message({
+          message: 'ASIN`s copied!',
+          type: 'success'
+        });
       }
     }
   }

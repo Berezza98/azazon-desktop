@@ -25,7 +25,7 @@ export default class Amazon extends EventEmitter {
         }
         console.log('EXEC PATH: ', puppeteer.executablePath());
         this.browser = await puppeteer.launch({
-            // headless : false,
+            headless : false,
             executablePath : getChromiumExecPath(),
             args : [
                 '--no-sandbox',
@@ -171,24 +171,28 @@ export default class Amazon extends EventEmitter {
             console.log(product.asElement());
             let url = await this.page.evaluate(element => element.getAttribute('href'), urlEl);
             console.log('URL: ', url);
+            if (url) {
+                this.goodPage = await this.browser.newPage();
+    
+                await this.goodPage.setRequestInterception(true);
+                let ignoreElements = ['image', 'stylesheet', 'font', 'script']; //'stylesheet', 'font', 'script'
+                this.goodPage.on('request', (req) => {
+                    if(ignoreElements.indexOf(req.resourceType()) !== -1){
+                        req.abort();
+                    }
+                    else {
+                        req.continue();
+                    }
+                });
+    
+                await this.goodPage.setViewport({
+                    width : 1920,
+                    height : 1080
+                });
+            } else {
+                return false;
+            }
 
-            this.goodPage = await this.browser.newPage();
-
-            await this.goodPage.setRequestInterception(true);
-            let ignoreElements = ['image', 'stylesheet', 'font', 'script']; //'stylesheet', 'font', 'script'
-            this.goodPage.on('request', (req) => {
-                if(ignoreElements.indexOf(req.resourceType()) !== -1){
-                    req.abort();
-                }
-                else {
-                    req.continue();
-                }
-            });
-
-            await this.goodPage.setViewport({
-                width : 1920,
-                height : 1080
-            });
             try {
                 await this.goodPage.goto('https://www.amazon.com' + url);
             } catch (e) {
