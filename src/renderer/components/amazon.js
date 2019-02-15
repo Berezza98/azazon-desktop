@@ -25,7 +25,7 @@ export default class Amazon extends EventEmitter {
         }
         console.log('EXEC PATH: ', puppeteer.executablePath());
         this.browser = await puppeteer.launch({
-            headless : false,
+            // headless : false,
             executablePath : getChromiumExecPath(),
             args : [
                 '--no-sandbox',
@@ -85,7 +85,7 @@ export default class Amazon extends EventEmitter {
             await this.page.type('#GLUXZipUpdateInput', this.zip, {delay: 20});
             await this.page.waitFor('#GLUXMobilePostalCodeSubmit');
             await this.page.tap('#GLUXMobilePostalCodeSubmit');
-            // await this.page.waitFor(1000);
+            await this.page.waitFor(1000);
             // await this.page.click('[name="glowDoneButton"]');
         }
     }
