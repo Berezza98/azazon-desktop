@@ -25,7 +25,7 @@ export default class Amazon extends EventEmitter {
         }
         console.log('EXEC PATH: ', puppeteer.executablePath());
         this.browser = await puppeteer.launch({
-            headless : false,
+            // headless : false,
             executablePath : getChromiumExecPath(),
             args : [
                 '--no-sandbox',
