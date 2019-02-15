@@ -39,18 +39,24 @@ export default class Amazon extends EventEmitter {
             isMobile : true,
             hasTouch : true
         });
+
+        // const context = this.browser.defaultBrowserContext();
+        // await context.overridePermissions('https://www.amazon.com', ['geolocation']);
+        // await this.page.setGeolocation({latitude : 32.606340, longitude : -85.491280});
+
         this.page.setUserAgent(this.userAgent);
         this.page.setDefaultNavigationTimeout(60000);
 
-        // await this.page.setRequestInterception(true);
-        // this.page.on('request', (req) => {
-        //     if(['image', 'stylesheet', 'font', 'script'].indexOf(req.resourceType()) !== -1){
-        //         req.abort();
-        //     }
-        //     else {
-        //         req.continue();
-        //     }
-        // });
+        await this.page.setRequestInterception(true);
+        let ignoreElements = ['image']; //'stylesheet', 'font', 'script'
+        this.page.on('request', (req) => {
+            if(ignoreElements.indexOf(req.resourceType()) !== -1){
+                req.abort();
+            }
+            else {
+                req.continue();
+            }
+        });
 
         try {
             await this.page.goto(this.url, {waitFor : 'domcontentloaded'});
@@ -68,20 +74,20 @@ export default class Amazon extends EventEmitter {
     }
 
     async changeLocation(){
-        // await this.page.waitForNavigation({waitUntil : 'load'});
-        console.log(1);
-        await this.page.waitFor('#nav-global-location-slot');
-        console.log('ELEMENT FOUNDED');
-        await this.page.click('#nav-global-location-slot');
-        await this.page.waitFor('#GLUXMobilePostalCodeLink');
-        await this.page.click('#GLUXMobilePostalCodeLink');
-        console.log('link')
-        await this.page.waitFor(500);
-        await this.page.type('#GLUXZipUpdateInput', '04211', {delay: 20});
-        await this.page.waitFor('#GLUXMobilePostalCodeSubmit');
-        await this.page.click('#GLUXMobilePostalCodeSubmit');
-        // await this.page.waitFor(1000);
-        // await this.page.click('[name="glowDoneButton"]');
+        if (this.zip && this.zip.trim()) {
+            // await this.page.waitForNavigation({waitUntil : 'load'});
+            await this.page.waitFor('#nav-global-location-slot');
+            await this.page.tap('#nav-global-location-slot');
+            await this.page.waitFor('#GLUXMobilePostalCodeLink');
+            await this.page.waitFor(1000);
+            await this.page.tap('#GLUXMobilePostalCodeLink');
+            await this.page.waitFor(1000);
+            await this.page.type('#GLUXZipUpdateInput', this.zip, {delay: 20});
+            await this.page.waitFor('#GLUXMobilePostalCodeSubmit');
+            await this.page.tap('#GLUXMobilePostalCodeSubmit');
+            // await this.page.waitFor(1000);
+            // await this.page.click('[name="glowDoneButton"]');
+        }
     }
 
     async addProductToResult(name, asin, rank){
@@ -114,8 +120,8 @@ export default class Amazon extends EventEmitter {
     }
 
     async getProducts(){
-        await this.page.waitForSelector('#resultItems li');
-        const products = await this.page.$$('#resultItems li a[data-asin]');
+        await this.page.waitForSelector('[data-asin]');
+        const products = await this.page.$$('[data-asin]');
         return products;
     }
 
@@ -154,11 +160,36 @@ export default class Amazon extends EventEmitter {
 
     async openGoodPage(product){
         try {
-            this.goodPage = await this.browser.newPage();
-    
-            let urlEl = await product.$('.a-spacing-base div > a[href]');
+
+            let urlEl;
+            
+            urlEl = await product.$('a[href]');
+
+            if (!urlEl) {
+                urlEl = product;
+            }
+            console.log(product.asElement());
             let url = await this.page.evaluate(element => element.getAttribute('href'), urlEl);
-            await this.goodPage.goto(url);
+            console.log('URL: ', url);
+
+            this.goodPage = await this.browser.newPage();
+
+            await this.goodPage.setRequestInterception(true);
+            let ignoreElements = ['image', 'stylesheet', 'font', 'script']; //'stylesheet', 'font', 'script'
+            this.goodPage.on('request', (req) => {
+                if(ignoreElements.indexOf(req.resourceType()) !== -1){
+                    req.abort();
+                }
+                else {
+                    req.continue();
+                }
+            });
+
+            await this.goodPage.setViewport({
+                width : 1920,
+                height : 1080
+            });
+            await this.goodPage.goto('https://www.amazon.com' + url);
         } catch (err) {
             console.log('ERROR: in openGoodPage', err);
         }
@@ -188,9 +219,7 @@ export default class Amazon extends EventEmitter {
         // const formattedHTML = html.replace(/ +(?= )/g,'');
         // const rank = formattedHTML.match(/(#.+ in .+) \(See/);
         try {
-            const result = await this.goodPage.evaluate(() => {
-                return Promise.resolve(document.body.innerText.match(/(#.+ in .+) \(See/));
-            });
+            const result = await this.goodPage.evaluate(() => document.body.innerText.match(/(#.+ in .+) \(See/));
             // console.log(rank);
             return result instanceof Array ? result[1] : result;
         } catch (err) {
@@ -213,18 +242,19 @@ export default class Amazon extends EventEmitter {
 
         while (goNext && i < 1) {
             let products = await this.getProducts();
-
+            console.log('products: ', products);
             for (let product of products) {
                 if (this.closed) {
                     await this.sendLastResponse();
                     await this.close();
                     return;
                 }
-                console.time('getting product');
+                console.time('getting product', product);
                 await this.openGoodPage(product);
                 let name = await this.getName();
                 let rank = await this.getRank();
                 let asin = await this.getASINsFromProduct(product);
+                console.log(name, asin, rank);
                 await this.sendResponse(name, asin, rank);
                 await this.closeGoodPage();
                 console.timeEnd('getting product');
@@ -241,6 +271,8 @@ export default class Amazon extends EventEmitter {
 
     async getOnlyAsins(){
         let goNext = true;
+
+        // await this.page.waitForNavigation({waitUntil : 'load'});
 
         while (goNext) {
             let products = await this.getProducts();

@@ -15,12 +15,12 @@
         <el-button class="full-width" type="warning" :disabled="!loading">Cancel</el-button>
       </el-col>
     </el-row>
-    <el-row class="box">
+    <el-row class="box" v-if="!loading">
       <el-col :span="24">
         <el-checkbox v-model="showAdv">Show advanced options</el-checkbox>
       </el-col>
     </el-row>
-    <el-row v-if="showAdv" class="middle box">
+    <el-row v-if="showAdv && !loading" class="middle box">
       <el-col :span="12">
         <el-switch
           v-model="getFullInfo"
@@ -37,9 +37,14 @@
       </el-col>
     </el-row>
     <el-row>
-      <el-card v-for="(element, index) in elements" :key="index" shadow="hover" class="item">
+      <!-- <el-card v-for="(element, index) in elements" :key="index" shadow="hover" class="item">
         {{ element.data.asin }}
-      </el-card>
+      </el-card> -->
+      <el-table :data="elements" empty-text="No data to show" highlight-current-row style="width: 100%">
+        <el-table-column prop="data.name" v-if="getFullInfo" label="Name"></el-table-column>
+        <el-table-column prop="data.asin" label="ASIN"></el-table-column>
+        <el-table-column prop="data.rank" v-if="getFullInfo" label="Rank"></el-table-column>
+      </el-table>
     </el-row>
   </div>
 </template>
@@ -64,17 +69,22 @@
       async getData () {
         this.elements = [];
         this.loading = true;
-        let myAmazon = new Amazon(this.url);
+        let myAmazon = new Amazon(this.url, this.zip);
         myAmazon.on('data', data => {
           let parsedData = JSON.parse(data);
           if (parsedData.data.last) {
             this.loading = false;
+          } else {
+            this.elements = [...this.elements, parsedData];
           }
-          this.elements = [...this.elements, parsedData];
         })
         await myAmazon.open();
         await myAmazon.changeLocation();
-        await myAmazon.getOnlyAsins();
+        if (this.getFullInfo) {
+          await myAmazon.getGoodsInfo();
+        } else {
+          await myAmazon.getOnlyAsins();
+        }
 
       }
     }
