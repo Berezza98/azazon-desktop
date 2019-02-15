@@ -25,7 +25,7 @@ export default class Amazon extends EventEmitter {
         }
         console.log('EXEC PATH: ', puppeteer.executablePath());
         this.browser = await puppeteer.launch({
-            // headless : false,
+            headless : false,
             executablePath : getChromiumExecPath(),
             args : [
                 '--no-sandbox',
@@ -120,8 +120,8 @@ export default class Amazon extends EventEmitter {
     }
 
     async getProducts(){
-        await this.page.waitForSelector('[data-asin]');
-        const products = await this.page.$$('[data-asin]');
+        await this.page.waitForSelector('[data-asin]:nth-child(-n+14)');
+        const products = await this.page.$$('[data-asin]:nth-child(-n+14)');
         return products;
     }
 
@@ -141,15 +141,15 @@ export default class Amazon extends EventEmitter {
         try {
             await this.page.waitFor('ul.a-pagination');
             nextPage = await this.page.$(`li.a-last a`);
-            console.log(nextPage ? 'NEXT PAGE EXISTS' : 'NEXT PAGE NOT EXISTS');
         } catch (err) {
             console.log(err);
         }
-
+        
         if (nextPage) {
             url = await this.page.evaluate(element => element.getAttribute('href'), nextPage);
         }
-
+        
+        console.log(url ? `NEXT PAGE EXISTS: ${url}` : 'NEXT PAGE NOT EXISTS');
         if (url) {
             await this.page.goto('https://www.amazon.com' + url);
             return true;
@@ -189,7 +189,14 @@ export default class Amazon extends EventEmitter {
                 width : 1920,
                 height : 1080
             });
-            await this.goodPage.goto('https://www.amazon.com' + url);
+            try {
+                await this.goodPage.goto('https://www.amazon.com' + url);
+            } catch (e) {
+                this.goodPage.close();
+                return false;
+            }
+
+            return true;
         } catch (err) {
             console.log('ERROR: in openGoodPage', err);
         }
@@ -237,10 +244,9 @@ export default class Amazon extends EventEmitter {
     }
 
     async getGoodsInfo(){
-        let i = 0;
         let goNext = true;
 
-        while (goNext && i < 1) {
+        while (goNext) {
             let products = await this.getProducts();
             console.log('products: ', products);
             for (let product of products) {
@@ -250,19 +256,21 @@ export default class Amazon extends EventEmitter {
                     return;
                 }
                 console.time('getting product', product);
-                await this.openGoodPage(product);
-                let name = await this.getName();
-                let rank = await this.getRank();
-                let asin = await this.getASINsFromProduct(product);
-                console.log(name, asin, rank);
-                await this.sendResponse(name, asin, rank);
-                await this.closeGoodPage();
-                console.timeEnd('getting product');
+                let opened = await this.openGoodPage(product);
+
+                if (opened) {
+                    let name = await this.getName();
+                    let rank = await this.getRank();
+                    let asin = await this.getASINsFromProduct(product);
+                    console.log(name, asin, rank);
+                    await this.sendResponse(name, asin, rank);
+                    await this.closeGoodPage();
+                    console.timeEnd('getting product');
+                }
             }
 
             console.log(this.result);
             goNext = await this.nextPage();
-            i++;
         }
 
         await this.sendLastResponse();
