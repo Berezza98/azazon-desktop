@@ -12,7 +12,7 @@
         <el-button class="full-width" type="primary" @click="getData()" :loading="loading">Get data</el-button>
       </el-col>
       <el-col :span="12">
-        <el-button class="full-width" type="warning" :disabled="!loading">Cancel</el-button>
+        <el-button class="full-width" type="warning" @click="stop()" :loading="cancelling" :disabled="!canCancel">{{ cancelling ? 'Cancelling' : 'Cancel'}}</el-button>
       </el-col>
     </el-row>
     <el-row class="box" v-if="!loading">
@@ -68,30 +68,45 @@
         elements : [],
         showAdv : false,
         getFullInfo : false,
-        zip : ""
+        zip : "",
+        canCancel : false,
+        myAmazon : null,
+        cancelling : false
       }
     },
     methods: {
       async getData () {
         this.elements = [];
         this.loading = true;
-        let myAmazon = new Amazon(this.url, this.zip);
-        myAmazon.on('data', data => {
+        this.myAmazon = new Amazon(this.url, this.zip);
+        this.myAmazon.on('data', data => {
           let parsedData = JSON.parse(data);
           if (parsedData.data.last) {
             this.loading = false;
+            this.cancelling = false;
+            this.canCancel = false;
           } else {
             this.elements = [...this.elements, parsedData];
           }
-        })
-        await myAmazon.open();
-        await myAmazon.changeLocation();
+        });
+
+        await this.myAmazon.open();
+        await this.myAmazon.changeLocation();
+        console.log('adsad')
+        this.canCancel = true;
+
         if (this.getFullInfo) {
-          await myAmazon.getGoodsInfo();
+          await this.myAmazon.getGoodsInfo();
         } else {
-          await myAmazon.getOnlyAsins();
+          await this.myAmazon.getOnlyAsins();
         }
 
+      },
+      stop(){
+        this.cancelling = true;
+        this.myAmazon.stop();
+        this.myAmazon = null;
+        this.canCancel = false;
       },
       copyAllAsins(){
         let allAsins = this.elements.map(element => element.data.asin);

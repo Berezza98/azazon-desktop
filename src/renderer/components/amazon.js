@@ -40,10 +40,6 @@ export default class Amazon extends EventEmitter {
             hasTouch : true
         });
 
-        // const context = this.browser.defaultBrowserContext();
-        // await context.overridePermissions('https://www.amazon.com', ['geolocation']);
-        // await this.page.setGeolocation({latitude : 32.606340, longitude : -85.491280});
-
         this.page.setUserAgent(this.userAgent);
         this.page.setDefaultNavigationTimeout(60000);
 
@@ -62,20 +58,27 @@ export default class Amazon extends EventEmitter {
             await this.page.goto(this.url, {waitFor : 'domcontentloaded'});
             return true;
         } catch (err) {
-            // this.ws.send(JSON.stringify(new Response(false, 'URL is not correct')));
-            this.emit('error', 'URL is not correct')
+            this.emit('error', 'URL is not correct');
+            this.close();
             return false;
         }
     }
 
     async close(){
+        await this.page.close();
+        if (this.goodPage) {
+            await this.page.close();
+        }
         await this.browser.close();
         console.log('BROWSER CLOSED');
     }
 
+    stop(){
+        this.closed = true;
+    }
+
     async changeLocation(){
         if (this.zip && this.zip.trim()) {
-            // await this.page.waitForNavigation({waitUntil : 'load'});
             await this.page.waitFor('#nav-global-location-slot');
             await this.page.tap('#nav-global-location-slot');
             await this.page.waitFor('#GLUXMobilePostalCodeLink');
@@ -86,7 +89,6 @@ export default class Amazon extends EventEmitter {
             await this.page.waitFor('#GLUXMobilePostalCodeSubmit');
             await this.page.tap('#GLUXMobilePostalCodeSubmit');
             await this.page.waitFor(1000);
-            // await this.page.click('[name="glowDoneButton"]');
         }
     }
 
@@ -96,11 +98,8 @@ export default class Amazon extends EventEmitter {
 
     async sendResponse(name, asin, rank){
         try {
-            // if (this.ws.readyState !== 3) {
-                let good = new Good(name, asin, rank);
-                // this.ws.send(JSON.stringify(new Response(true, '', good)));
-                this.emit('data', JSON.stringify(new Response(true, '', good)));
-            // }
+            let good = new Good(name, asin, rank);
+            this.emit('data', JSON.stringify(new Response(true, '', good)));
         } catch (err) {
             console.log('ERROR in sendResponse: ', err);
         }
@@ -108,12 +107,9 @@ export default class Amazon extends EventEmitter {
 
     async sendLastResponse(){
         try {
-            // if (this.ws.readyState !== 3) {
-                let good = new Good('', '', '', true)
-                // this.ws.send(JSON.stringify(new Response(true, '', good)));
-                this.emit('data', JSON.stringify(new Response(true, '', good)));
-                await this.close();
-            // }
+            let good = new Good('', '', '', true);
+            this.emit('data', JSON.stringify(new Response(true, '', good)));
+            await this.close();
         } catch (err) {
             console.log('ERROR in sendResponse: ', err);
         }
@@ -226,12 +222,8 @@ export default class Amazon extends EventEmitter {
     }
 
     async getRank(){
-        // const html = await this.goodPage.content();
-        // const formattedHTML = html.replace(/ +(?= )/g,'');
-        // const rank = formattedHTML.match(/(#.+ in .+) \(See/);
         try {
             const result = await this.goodPage.evaluate(() => document.body.innerText.match(/(#.+ in .+) \(See/));
-            // console.log(rank);
             return result instanceof Array ? result[1] : result;
         } catch (err) {
             console.log('ERROR in getRank', err);
@@ -283,8 +275,6 @@ export default class Amazon extends EventEmitter {
 
     async getOnlyAsins(){
         let goNext = true;
-
-        // await this.page.waitForNavigation({waitUntil : 'load'});
 
         while (goNext) {
             let products = await this.getProducts();
